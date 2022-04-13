@@ -1,117 +1,138 @@
-import os
-import pytz
-import pyowm
 import streamlit as st
+import numpy as np
+import matplotlib.pyplot as plt
 from matplotlib import dates
-from datetime import datetime
-from matplotlib import pyplot as plt
-import plotly.graph_objects as go
-import plotly.express as px
+from datetime import datetime,date
+import pyowm
+from pyowm import OWM
+from matplotlib import rcParams
+from pytz import timezone
+from pyowm.utils import timestamps
 
+#API id from openweathermap
+api = '08820823151504804d9d6c720d917d80'
+owm = OWM(api)     
+mgr = owm.weather_manager()
+degree = u'\N{DEGREE SIGN}'
 
-API_KEY = pyowm.OWM('08820823151504804d9d6c720d917d80') 
-owm = pyowm.OWM(API_KEY)
-mgr=owm.weather_manager()
+st.title('Weather Forecast ' + "\U0001F600" )
+st.write('Write the name of a City and select the Temperature Unit and Graph Type from the sidebar')
 
-degree_sign= u'\N{DEGREE SIGN}'
+city = st.text_input("Name of the City: ", "")
 
-st.title("5 Day Weather Forecast")
-st.write("### Write the name of a City and select the Temperature Unit and Graph Type from the sidebar")
+if city == None:
+    st.write("Please Enter a city name")
 
-place=st.text_input("NAME OF THE CITY :", "")
+unit = st.selectbox("Select the Temperature Unit: ", ("Celsius", "Fahrenheit"))
+graph = st.selectbox("Select the Graph Type: ", ("Line Graph", "Bar Graph"))
 
+b = st.button("SUBMIT")
 
-if place == None:
-    st.write("Input a CITY!")
-
-
-
-unit=st.selectbox("Select Temperature Unit",("Celsius","Fahrenheit"))
-
-g_type=st.selectbox("Select Graph Type",("Line Graph","Bar Graph"))
-
-if unit == 'Celsius':
-    unit_c = 'celsius'
-else:
-    unit_c = 'fahrenheit'
-
-
-def get_temperature():
-    days = []
-    dates = []
-    temp_min = []
-    temp_max = []
-    forecaster = mgr.forecast_at_place(place, '3h')
-    forecast=forecaster.forecast
-    for weather in forecast:
-        day=datetime.utcfromtimestamp(weather.reference_time())
-        #day = gmt_to_eastern(weather.reference_time())
-        date = day.date()
-        if date not in dates:
-            dates.append(date)
-            temp_min.append(None)
-            temp_max.append(None)
-            days.append(date)
-        temperature = weather.temperature(unit_c)['temp']
-        if not temp_min[-1] or temperature < temp_min[-1]:
-            temp_min[-1] = temperature
-        if not temp_max[-1] or temperature > temp_max[-1]:
-            temp_max[-1] = temperature
-    return(days, temp_min, temp_max)
-
-def init_plot():
-     plt.figure('PyOWM Weather', figsize=(5,4))
-     plt.xlabel('Day')
-     plt.ylabel(f'Temperature ({degree_sign}F)')
-     plt.title('Weekly Forecast')
-
-
-
-def plot_temperatures(days, temp_min, temp_max):
-    # days = dates.date2num(days)
-    fig = go.Figure(
-        data=[
-            go.Bar(name='minimum temperatures', x=days, y=temp_min),
-            go.Bar(name='maximum temperatures', x=days, y=temp_max)
-        ]
-    )
-    fig.update_layout(barmode='group')
-    return fig
-
-
-def plot_temperatures_line(days, temp_min, temp_max):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=days, y=temp_min, name='minimum temperatures'))
-    fig.add_trace(go.Scatter(x=days, y=temp_max, name='maximimum temperatures'))
-    return fig
-
-def label_xaxis(days):
+def pltline(days,mint,maxt):
+    days = dates.date2num(days)
+    rcParams['figure.figsize']=6,4
+    plt.plot(days,maxt,color='green',linewidth = 1,marker='.',markerfacecolor='red',markersize=5) 
+    plt.plot(days,mint,color='orange',linewidth = 1,marker='.',markerfacecolor='blue',markersize=5)     
+    plt.ylim(min(mint)-3,max(maxt)+4)
     plt.xticks(days)
-    axes = plt.gca()
-    xaxis_format = dates.DateFormatter('%m/%d')
-    axes.xaxis.set_major_formatter(xaxis_format)
+    #to get current polar axes on fig, If the current axes doesn't exist, or isn't a polar one, the appropriate axes will be created and then returned
+    x_y_axis=plt.gca()    
+    xaxis_format=dates.DateFormatter('%m/%d')
+        
+        
+    x_y_axis.xaxis.set_major_formatter(xaxis_format)
+    plt.legend(["Maximum Temperaure","Minimum Temperature"],loc=1) 
+    plt.xlabel('Dates(mm/dd)') 
+    plt.ylabel('Temperature') 
+    plt.title('5-Day Weather Forecast')   
+        
+    for i in range(5):
+        plt.text(days[i], mint[i]-1.5, mint[i], horizontalalignment='center', verticalalignment='bottom', color='black')
+    for i in range(5):
+        plt.text(days[i], maxt[i]+0.5, maxt[i], horizontalalignment='center', verticalalignment='bottom', color='black')
+    
+    st.pyplot()
+    plt.clf()
 
-def draw_bar_chart():
-    days, temp_min, temp_max = get_temperature()
-    fig = plot_temperatures(days, temp_min, temp_max)
-    # write_temperatures_on_bar_chart(bar_min, bar_max)
-    st.plotly_chart(fig)
-    st.title("Minimum and Maximum Temperatures")
-    for i in range (0,5):
-        st.write("### ",temp_min[i],degree_sign,' --- ',temp_max[i],degree_sign)
-
-
-def draw_line_chart():
-    days, temp_min, temp_max = get_temperature()
-    fig = plot_temperatures_line(days, temp_min, temp_max)
-    st.plotly_chart(fig)
-    st.title("Minimum and Maximum Temperatures")
-    for i in range (0,5):
-        st.write("### ",temp_min[i],degree_sign,' --- ',temp_max[i],degree_sign)
-
-def other_weather_updates():
-    forecaster = mgr.forecast_at_place(place, '3h')
-    st.title("Impending Temperature Changes :")
+def pltbar(days,mint,maxt):  
+        rcParams['figure.figsize']=6,4
+        days=dates.date2num(days)
+        min_temp_bar=plt.bar(days-0.2, mint, width=0.4, color='y')
+        max_temp_bar=plt.bar(days+0.2, maxt, width=0.4, color='r')        
+        plt.xticks(days)
+        x_y_axis=plt.gca()
+        xaxis_format=dates.DateFormatter('%m/%d')
+        
+        x_y_axis.xaxis.set_major_formatter(xaxis_format)
+        plt.xlabel('Dates(mm/dd)') 
+        plt.ylabel('Temperature') 
+        plt.title('5-Day Weather Forecast')
+        
+        for bar_chart in [min_temp_bar,max_temp_bar]:
+            for index,bar in enumerate(bar_chart):
+                height=bar.get_height()
+                xpos=bar.get_x()+bar.get_width()/2.0
+                ypos=height 
+                label_text=str(int(height))
+                plt.text(xpos, ypos,label_text,
+                        horizontalalignment='center',
+                        verticalalignment='bottom',
+                        color='black')
+        
+        
+        st.pyplot()
+        plt.clf()
+        
+def find(city,unit,graph):
+    mgr=owm.weather_manager()
+    days=[]
+    dates_2=[]
+    mint=[]
+    maxt=[]
+    forecaster = mgr.forecast_at_place(city, '3h')
+    forecast = forecaster.forecast
+    if unit=='Celsius':
+        units='celsius'
+    else:
+        units='fahrenheit'
+    
+    for weather in forecast:
+        day = datetime.utcfromtimestamp(weather.reference_time())
+        date = day.date()
+        if date not in dates_2:
+            dates_2.append(date)
+            mint.append(None)
+            maxt.append(None)
+            days.append(date)
+        temperature = weather.temperature(units)['temp']
+        
+        if not mint[-1] or temperature < mint[-1]:
+            mint[-1]=temperature
+        if not maxt[-1] or temperature > maxt[-1]:
+            maxt[-1]=temperature
+    
+    if graph=="Line Graph":
+        pltline(days,mint,maxt)
+    elif graph=="Bar Graph":
+        pltbar(days,mint,maxt)
+    i=0
+    st.write(f"#    Date :  Max - Min  ({unit})")
+    for obj in days:
+        d=(obj.strftime("%d/%m"))
+        st.write(f"### \v {d} :\t  ({maxt[i]} - {mint[i]})")
+        i+=1
+      
+    obs=mgr.weather_at_place(city)
+    weather=obs.weather
+    st.title(f"Details for {city} currently:")
+    st.write(f"### Sky : {weather.detailed_status}")
+    st.write(f"### Wind Speed : {weather.wind()['speed']} mph")
+    st.write(f"### Sunrise Time : {weather.sunrise_time(timeformat='iso')} GMT")
+    st.write(f"### Sunset Time : {weather.sunset_time(timeformat='iso')} GMT")
+    
+    
+    forecaster = mgr.forecast_at_place(city, '3h') 
+    st.title("Impending Temperature Changes: ")
     if forecaster.will_have_fog():
         st.write("FOG Alert!")
     if forecaster.will_have_rain():
@@ -128,37 +149,8 @@ def other_weather_updates():
         st.write("Cloudy Skies ☁️")    
     if forecaster.will_have_clear():
         st.write("Clear Weather! 🪂")
+        
+if b:
+    if not city=="":    
+        find(city,unit,graph)
 
-def cloud_and_wind():
-    obs=mgr.weather_at_place(place)
-    weather=obs.weather
-    cloud_cov=weather.clouds
-    winds=weather.wind()['speed']
-    st.title("Cloud coverage and wind speed")
-    st.write('The current cloud coverage for',place,'is',cloud_cov,'%')
-    st.write('The current wind speed for',place, 'is',winds,'mph')
-
-def sunrise_and_sunset():
-    obs=mgr.weather_at_place(place)
-    weather=obs.weather
-    st.title("Sunrise and Sunset Times :")
-    india = pytz.timezone("Asia/Kolkata")
-    ss=weather.sunset_time(timeformat='iso')
-    sr=weather.sunrise_time(timeformat='iso')  
-    st.write("### Sunrise time in",place,"is",sr)
-    st.write("### Sunset time in",place,"is",ss)
-
-def updates():
-    other_weather_updates()
-    cloud_and_wind()
-    sunrise_and_sunset()
-
-
-if __name__ == '__main__':
-    
-    if st.button("SUBMIT"):
-        if g_type == 'Line Graph':
-            draw_line_chart()    
-        else:
-            draw_bar_chart()
-        updates()
