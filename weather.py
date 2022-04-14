@@ -8,6 +8,7 @@ from pyowm import OWM
 from matplotlib import rcParams
 from pytz import timezone
 from pyowm.utils import timestamps
+import click
 
 #API id from openweathermap
 api = '08820823151504804d9d6c720d917d80'
